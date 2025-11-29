@@ -41,7 +41,7 @@ pub mod error;
 const CHANNEL_SETTING_X: u8 = 0b10010000;
 const CHANNEL_SETTING_Y: u8 = 0b11010000;
 
-const MAX_SAMPLES: usize = 128;
+const MAX_SAMPLES: usize = 2;
 const TX_BUFF_LEN: usize = 5;
 
 #[cfg_attr(feature = "with_defmt", derive(Format))]
@@ -178,11 +178,9 @@ impl TouchSamples {
 }
 
 #[derive(Debug)]
-pub struct Xpt2046<SPI, CS, PinIRQ> {
+pub struct Xpt2046<SPI, PinIRQ> {
     /// THe SPI interface
     spi: SPI,
-    /// Control pin
-    cs: CS,
     /// Interrupt control pin
     irq: PinIRQ,
     /// Internall buffers tx
@@ -200,16 +198,14 @@ pub struct Xpt2046<SPI, CS, PinIRQ> {
     calibration_point: CalibrationPoint,
 }
 
-impl<SPI, CS, PinIRQ> Xpt2046<SPI, CS, PinIRQ>
+impl<SPI, PinIRQ> Xpt2046<SPI, PinIRQ>
 where
     SPI: SpiDevice<u8>,
-    CS: OutputPin,
     PinIRQ: InputPin,
 {
-    pub fn new(spi: SPI, cs: CS, irq: PinIRQ, orientation: Orientation) -> Self {
+    pub fn new(spi: SPI, irq: PinIRQ, orientation: Orientation) -> Self {
         Self {
             spi,
-            cs,
             irq,
             tx_buff: [0; TX_BUFF_LEN],
             rx_buff: [0; TX_BUFF_LEN],
@@ -222,24 +218,17 @@ where
     }
 }
 
-impl<SPI, CS, PinIRQ, SPIError, CSError> Xpt2046<SPI, CS, PinIRQ>
+impl<SPI, PinIRQ, SPIError, CSError> Xpt2046<SPI, PinIRQ>
 where
     SPI: SpiDevice<u8, Error = SPIError>,
-    CS: OutputPin<Error = CSError>,
     PinIRQ: InputPin<Error = CSError>,
     SPIError: Debug,
     CSError: Debug,
 {
     fn spi_read(&mut self) -> Result<(), Error<BusError<SPIError, CSError>>> {
-        self.cs
-            .set_low()
-            .map_err(|e| Error::Bus(BusError::Pin(e)))?;
         self.spi
             .transfer(&mut self.rx_buff, &self.tx_buff)
             .map_err(|e| Error::Bus(BusError::Spi(e)))?;
-        self.cs
-            .set_high()
-            .map_err(|e| Error::Bus(BusError::Pin(e)))?;
         Ok(())
     }
 
@@ -247,8 +236,8 @@ where
     fn read_xy(&mut self) -> Result<Point, Error<BusError<SPIError, CSError>>> {
         self.spi_read()?;
 
-        let x = (self.rx_buff[1] as i32) << 8 | self.rx_buff[2] as i32;
-        let y = (self.rx_buff[3] as i32) << 8 | self.rx_buff[4] as i32;
+        let x = ((self.rx_buff[1] as i32) << 8) | (self.rx_buff[2] as i32);
+        let y = ((self.rx_buff[3] as i32) << 8) | (self.rx_buff[4] as i32);
         Ok(Point::new(x, y))
     }
 
@@ -298,7 +287,6 @@ where
         delay: &mut D,
     ) -> Result<(), Error<BusError<SPIError, CSError>>> {
         self.tx_buff[0] = 0x80;
-        self.cs.set_high()?;
         self.spi_read()?;
         delay.delay_ms(1);
 
@@ -323,12 +311,23 @@ where
     /// interrupt
     pub fn run(
         &mut self,
-    ) -> Result<(), Error<BusError<SPIError, CSError>>> {
-        match self.screen_state {
+    ) -> Result<&[u8], Error<BusError<SPIError, CSError>>> {
+        let bytes = match self.screen_state {
             TouchScreenState::IDLE => {
-                if self.operation_mode == TouchScreenOperationMode::CALIBRATION && self.irq.is_low()?
+                if /*self.operation_mode == TouchScreenOperationMode::CALIBRATION &&*/ self.irq.is_low()?
                 {
                     self.screen_state = TouchScreenState::PRESAMPLING;
+                }
+                let a = self.operation_mode == TouchScreenOperationMode::CALIBRATION;
+                let b =  self.irq.is_low()?;
+                if a && b {
+                    "wpf".as_bytes()
+                } else if a {
+                    "calibration".as_bytes()
+                } else if b {
+                    "irq".as_bytes()
+                } else {
+                    "IDLE".as_bytes()
                 }
             }
             TouchScreenState::PRESAMPLING => {
@@ -342,6 +341,7 @@ where
                     self.ts.counter = 0;
                     self.screen_state = TouchScreenState::TOUCHED;
                 }
+                "PRESAMPLING".as_bytes()
             }
             TouchScreenState::TOUCHED => {
                 let point_sample = self.read_touch_point()?;
@@ -355,13 +355,15 @@ where
                 if self.irq.is_high()? {
                     self.screen_state = TouchScreenState::RELEASED
                 }
+                "TOUCHED".as_bytes()
             }
             TouchScreenState::RELEASED => {
                 self.screen_state = TouchScreenState::IDLE;
                 self.ts.counter = 0;
+                "RELEASED".as_bytes()
             }
-        }
-        Ok(())
+        };
+        Ok(bytes)
     }
 
     /// Collects the reading for 3 sample points and
