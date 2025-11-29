@@ -304,7 +304,7 @@ where
     pub fn run(
         &mut self,
     ) -> Result<(), Error<BusError<SPIError, CSError>>> {
-        let bytes = match self.screen_state {
+        match self.screen_state {
             TouchScreenState::IDLE => {
                 if /*self.operation_mode == TouchScreenOperationMode::CALIBRATION &&*/ self.irq.is_low()?
                 {
@@ -341,7 +341,7 @@ where
                 self.ts.counter = 0;
             }
         };
-        Ok(bytes)
+        Ok(())
     }
 
     // /// Collects the reading for 3 sample points and
