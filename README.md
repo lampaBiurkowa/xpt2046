@@ -1,16 +1,8 @@
 # XPT2046 touch LCD driver
 
-[![Crates.io](https://img.shields.io/crates/d/xpt2046.svg)](https://crates.io/crates/xpt2046)
-[![Crates.io](https://img.shields.io/crates/v/xpt2046.svg)](https://crates.io/crates/xpt2046)
-[![Released API docs](https://docs.rs/xpt2046/badge.svg)](https://docs.rs/xpt2046)
-
-Rust Embeddd Hal based driver for xpt2046 touch screen driver
-
-## Documentation
-[View Complete Documentation Here](https://docs.rs/xpt2046)
-
-
-![demo](touch_rust.png)
+fork of https://github.com/N8BWert/xpt2046
+which itself is fork of https://github.com/VersBinarii/xpt2046
+which is licensed on:
 
 ## License
 
