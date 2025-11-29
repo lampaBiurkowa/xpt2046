@@ -303,23 +303,12 @@ where
     /// interrupt
     pub fn run(
         &mut self,
-    ) -> Result<&[u8], Error<BusError<SPIError, CSError>>> {
+    ) -> Result<(), Error<BusError<SPIError, CSError>>> {
         let bytes = match self.screen_state {
             TouchScreenState::IDLE => {
                 if /*self.operation_mode == TouchScreenOperationMode::CALIBRATION &&*/ self.irq.is_low()?
                 {
                     self.screen_state = TouchScreenState::PRESAMPLING;
-                }
-                let a = self.operation_mode == TouchScreenOperationMode::CALIBRATION;
-                let b =  self.irq.is_low()?;
-                if a && b {
-                    "wpf".as_bytes()
-                } else if a {
-                    "calibration".as_bytes()
-                } else if b {
-                    "irq".as_bytes()
-                } else {
-                    "IDLE".as_bytes()
                 }
             }
             TouchScreenState::PRESAMPLING => {
@@ -333,7 +322,6 @@ where
                     self.ts.counter = 0;
                     self.screen_state = TouchScreenState::TOUCHED;
                 }
-                "PRESAMPLING".as_bytes()
             }
             TouchScreenState::TOUCHED => {
                 let point_sample = self.read_touch_point()?;
@@ -347,12 +335,10 @@ where
                 if self.irq.is_high()? {
                     self.screen_state = TouchScreenState::RELEASED
                 }
-                "TOUCHED".as_bytes()
             }
             TouchScreenState::RELEASED => {
                 self.screen_state = TouchScreenState::IDLE;
                 self.ts.counter = 0;
-                "RELEASED".as_bytes()
             }
         };
         Ok(bytes)
